@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Webhooks - Email integration
  * Plugin URI: https://ironikus.com/downloads/wp-webhooks-emails/
- * Description: A WP Webhooks & Pro extension for integrating emails
+ * Description: A WP Webhooks & Pro extension for integrating WordPress emails
  * Version: 1.0.0
  * Author: Ironikus
  * Author URI: https://ironikus.com/

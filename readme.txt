@@ -5,11 +5,11 @@ Contributors: ironikus
 Donate link: https://paypal.me/ironikus
 Tags: email, e-mail, webhooks, automation, ironikus, wp_mail, email automation, zapier, api, wp webhooks, mailing
 Requires at least: 4.7
-Tested up to: 5.3.2
+Tested up to: 5.4.2
 Stable Tag: 1.0.0
 License: GNU Version 3 or Any Later Version
 
-A WP Webhooks extension to integrate WordPress emails
+A WP Webhooks & Pro extension for integrating WordPress emails
 
 == Description ==
 
@@ -23,6 +23,8 @@ For a full list of the features, please check down below:
 * Support for certain tags like CC, BCC, FROM, REPLY-TO and more
 * Support for attachments
 * Support for HTML content
+
+[See plugin web view](https://wp-webhooks.com/)
 
 = For devs =
 
