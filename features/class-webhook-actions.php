@@ -229,16 +229,22 @@ function my_custom_callback_function( $check, $return_args ){
 			);
 
 		    //This is how defined parameters look - you can use the exact same structure and catch the data you need
-			$send_to     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'sent_to' );
+			$sent_to     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'sent_to' ); //For Fallback compatibility
+			$send_to     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'send_to' );
 			$subject     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'subject' );
 			$message     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'message' );
 			$additional_headers     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'headers' );
 			$additional_attachments     = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'attachments' );
 			$do_action          = WPWHPRO()->helpers->validate_request_value( $response_body['content'], 'do_action' );
 
+			//Correct incompatible values
+			if( empty( $send_to ) && ! empty( $sent_to ) ){
+				$send_to = $sent_to;
+			}
+
 			//Validate required fields
 			if( empty( $send_to ) ){
-				$return_args['msg'] = WPWHPRO()->helpers->translate( "The sent_to argument cannot be empty.", 'action-send_email-failure' );
+				$return_args['msg'] = WPWHPRO()->helpers->translate( "The send_to argument cannot be empty.", 'action-send_email-failure' );
 				WPWHPRO()->webhook->echo_response_data( $return_args );
 				die();
 			}
