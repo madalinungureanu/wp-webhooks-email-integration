@@ -43,10 +43,7 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Triggers' ) ){
          */
 		public function add_webhook_triggers() {
 
-			$active_webhooks   = WPWHPRO()->settings->get_active_webhooks();
-			$availale_triggers = $active_webhooks['triggers'];
-
-			if ( isset( $availale_triggers['send_email'] ) ) {
+			if( ! empty( WPWHPRO()->webhook->get_hooks( 'trigger', 'send_email' ) ) ){
 				add_filter( 'wp_mail', array( $this, 'ironikus_trigger_send_email' ), 10, 1 );
 				add_filter( 'ironikus_demo_test_send_email', array( $this, 'ironikus_send_demo_test_send_email' ), 10, 3 );
 			}
@@ -134,7 +131,13 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Triggers' ) ){
 			$response_data = array();
 
 			foreach( $webhooks as $webhook ){
-				$response_data[] = WPWHPRO()->webhook->post_to_webhook( $webhook, $atts );
+				$webhook_url_name = ( is_array($webhook) && isset( $webhook['webhook_url_name'] ) ) ? $webhook['webhook_url_name'] : null;
+
+				if( $webhook_url_name !== null ){
+					$response_data[ $webhook_url_name ] = WPWHPRO()->webhook->post_to_webhook( $webhook, $atts );
+				} else {
+					$response_data[] = WPWHPRO()->webhook->post_to_webhook( $webhook, $atts );
+				}
 			}
 
 			do_action( 'wpwhpro/webhooks/trigger_send_email', $atts, $response_data );

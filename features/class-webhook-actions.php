@@ -7,11 +7,54 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Actions' ) ){
 
 	class WP_Webhooks_Email_Integration_Actions{
 
+		private $wpe_use_new_filter = null;
+
 		public function __construct() {
 
-			add_action( 'wpwhpro/webhooks/add_webhooks_actions', array( $this, 'add_webhook_actions' ), 20, 3 );
+			if( $this->wpwh_use_new_action_filter() ){
+				add_filter( 'wpwhpro/webhooks/add_webhook_actions', array( $this, 'add_webhook_actions' ), 20, 4 );
+			} else {
+				add_action( 'wpwhpro/webhooks/add_webhooks_actions', array( $this, 'add_webhook_actions' ), 20, 3 );
+			}
 			add_filter( 'wpwhpro/webhooks/get_webhooks_actions', array( $this, 'add_webhook_actions_content' ), 20 );
 
+		}
+
+		/**
+		 * ######################
+		 * ###
+		 * #### HELPERS
+		 * ###
+		 * ######################
+		 */
+
+		public function wpwh_use_new_action_filter(){
+
+			if( $this->wpe_use_new_filter !== null ){
+				return $this->wpe_use_new_filter;
+			}
+
+			$return = false;
+			$version_current = '0';
+			$version_needed = '0';
+	
+			if( defined( 'WPWHPRO_VERSION' ) ){
+				$version_current = WPWHPRO_VERSION;
+				$version_needed = '4.1.0';
+			}
+	
+			if( defined( 'WPWH_VERSION' ) ){
+				$version_current = WPWH_VERSION;
+				$version_needed = '3.1.0';
+			}
+	
+			if( version_compare( (string) $version_current, (string) $version_needed, '>=') ){
+				$return = true;
+			}
+
+			$this->wpe_use_new_filter = $return;
+
+			return $return;
 		}
 
 		/**
@@ -46,19 +89,41 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Actions' ) ){
 		 * @param $webhook - The webhook itself
 		 * @param $api_key - an api_key if defined
 		 */
-		public function add_webhook_actions( $action, $webhook, $api_key ){
+		public function add_webhook_actions( $response, $action, $webhook, $api_key = '' ){
 
-			$active_webhooks = WPWHPRO()->settings->get_active_webhooks();
+			//Backwards compatibility prior 4.1.0 (wpwhpro) or 3.1.0 (wpwh)
+			if( ! $this->wpwh_use_new_action_filter() ){
+				$api_key = $webhook;
+				$webhook = $action;
+				$action = $response;
 
-			$available_actions = $active_webhooks['actions'];
+				$active_webhooks = WPWHPRO()->settings->get_active_webhooks();
+				$available_actions = $active_webhooks['actions'];
+
+				if( ! isset( $available_actions[ $action ] ) ){
+					return $response;
+				}
+			}
+
+			$return_data = null;
 
 			switch( $action ){
 				case 'send_email':
-					if( isset( $available_actions['send_email'] ) ){
-						$this->action_send_email();
-					}
+					$return_data = $this->action_send_email();
 					break;
 			}
+
+			//Make sure we only fire the response in case the old logic is used
+			if( $return_data !== null && ! $this->wpwh_use_new_action_filter() ){
+				WPWHPRO()->webhook->echo_response_data( $return_data );
+				die();
+			}
+
+			if( $return_data !== null ){
+				$response = $return_data;
+			}
+			
+			return $response;
 		}
 
 		
@@ -73,6 +138,7 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Actions' ) ){
 				'message'       => array( 'required' => true, 'short_description' => WPWHPRO()->helpers->translate( '(string) Message contents', 'action-send_email-content' ) ),
 				'headers'    => array( 'short_description' => WPWHPRO()->helpers->translate( '(string) A JSON formatted string contaiing additional settings for the email such as CC, BCC, From etc. - Please see the description for further details.', 'action-send_email-content' ) ),
 				'attachments'    => array( 'short_description' => WPWHPRO()->helpers->translate( '(string) A JSON formatted string contaiing attachments that should be added to the email. Please see the description for further information.', 'action-send_email-content' ) ),
+				'do_action'    => array( 'short_description' => WPWHPRO()->helpers->translate( 'Advanced: Register a custom action after the webhook fires.', 'action-send_email-content' ) ),
 			);
 
 			//This is a more detailled view of how the data you sent will be returned.
@@ -81,6 +147,83 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Actions' ) ){
 				'msg'        => array( 'short_description' => WPWHPRO()->helpers->translate( '(string) A message with more information about the current request. E.g. array( \'msg\' => "This action was successful.', 'action-send_email-content' ) ),
 				'data'        => array( 'short_description' => WPWHPRO()->helpers->translate( '(array) Further details about the sent data.', 'action-send_email-content' ) ),
 			);
+
+			ob_start();
+		?>
+<?php echo WPWHPRO()->helpers->translate( "This argument should contain the email address(es) you want to send this email to. To use multiple ones, simply separate them with a comma:", $translation_ident ); ?>
+<pre>demoemail@somedomain.demo,anotheremail@somedomain.demo</pre>
+		<?php
+		$parameter['send_to']['description'] = ob_get_clean();
+
+			ob_start();
+		?>
+<?php echo WPWHPRO()->helpers->translate( "This argument allows you to add further settings to your email using a JSON formatted string. Down below you will find a predefined JSON with the most common settings. If you want to read further on what's possible, you can checkout the following documentation:", $translation_ident ); ?> 
+<a target="_blank" href="https://developer.wordpress.org/reference/functions/wp_mail/" title="https://developer.wordpress.org/reference/functions/wp_mail/">https://developer.wordpress.org/reference/functions/wp_mail/</a>
+<br>
+<?php echo WPWHPRO()->helpers->translate( "The example below shows common settings within the formatted JSON for the <strong>headers</strong> argument. Explanations for each line are down below.", $translation_ident ); ?>
+<pre>[
+  "Content-Type: text/html; charset=UTF-8",
+  "From: Sender Name <anotheremail@someemail.demo>",
+  "Cc: First CC Name <receiver@someemail.demo>",
+  "Cc: onlyemail@someemail.demo",
+  "Bcc: bccmail@someemail.demo",
+  "Reply-To: Reply Name <replytome@someemail.demo>"
+]</pre>
+<ol>
+    <li><strong>Content-Type</strong>: <?php echo WPWHPRO()->helpers->translate( "This entry show you how you can customize the default content type.", $translation_ident ); ?></li>
+    <li><strong>Cc</strong>: <?php echo WPWHPRO()->helpers->translate( "This line allows you to show a custom from address. You can either use the simply email or the notation in the example to show further details about the receiver.", $translation_ident ); ?></li>
+    <li><strong>Cc</strong>: <?php echo WPWHPRO()->helpers->translate( "You can also define multiple times the Cc or Bcc entries if you want to send it to multiple persons. Also, this example shows how you can use only the email.", $translation_ident ); ?></li>
+    <li><strong>Bcc</strong>: <?php echo WPWHPRO()->helpers->translate( "The Bcc entry allows the same settings as the Cc entry.", $translation_ident ); ?></li>
+    <li><strong>Reply-To</strong>: <?php echo WPWHPRO()->helpers->translate( "This entry allows you to specify a different reply address for your email. You can either use the seen notation or a simple email as seen in the Cc example.", $translation_ident ); ?></li>
+</ol>
+		<?php
+		$parameter['headers']['description'] = ob_get_clean();
+
+			ob_start();
+		?>
+<?php echo WPWHPRO()->helpers->translate( "This argument allows you to attach one or multiple files to the email using a JSON formatted string. If you want to read further on what's possible, you can check out the following documentation:", $translation_ident ); ?> 
+<a target="_blank" href="https://developer.wordpress.org/reference/functions/wp_mail/" title="https://developer.wordpress.org/reference/functions/wp_mail/">https://developer.wordpress.org/reference/functions/wp_mail/</a>
+<br>
+<?php echo WPWHPRO()->helpers->translate( "The example below shows how you can use this argument. Explanations for each line are down below.", $translation_ident ); ?>
+<pre>[
+  "/Your/full/server/path/wp-content/uploads/2020/06/my-custom-file.jpg",
+  "{content-dir}/uploads/2020/06/another-file.png"
+]</pre>
+<ol>
+    <li><strong>Direct path</strong>: <?php echo WPWHPRO()->helpers->translate( "The fist line adds a jpeg image to the email. It does it by using the direct path of the image on the server.", $translation_ident ); ?></li>
+    <li><strong>Dynamic path</strong>: <?php echo WPWHPRO()->helpers->translate( "In case you do not want to hardcode the dynamic path, you can also use our <strong>{content-dir}</strong> tag, which automatically adds the direct path.", $translation_ident ); ?></li>
+</ol>
+		<?php
+		$parameter['attachments']['description'] = ob_get_clean();
+
+			ob_start();
+		?>
+<?php echo WPWHPRO()->helpers->translate( "The <strong>do_action</strong> argument is an advanced webhook for developers. It allows you to fire a custom WordPress hook after the <strong>send_email</strong> action was fired.", $translation_ident ); ?>
+<br>
+<?php echo WPWHPRO()->helpers->translate( "You can use it to trigger further logic after the webhook action. Here's an example:", $translation_ident ); ?>
+<br>
+<br>
+<?php echo WPWHPRO()->helpers->translate( "Let's assume you set for the <strong>do_action</strong> parameter <strong>fire_this_function</strong>. In this case, we will trigger an action with the hook name <strong>fire_this_function</strong>. Here's how the code would look in this case:", $translation_ident ); ?>
+<pre>add_action( 'fire_this_function', 'my_custom_callback_function', 20, 2 );
+function my_custom_callback_function( $check, $return_args ){
+    //run your custom logic in here
+}
+</pre>
+<?php echo WPWHPRO()->helpers->translate( "Here's an explanation to each of the variables that are sent over within the custom function.", $translation_ident ); ?>
+<ol>
+    <li>
+        <strong>$check</strong> (bool)
+        <br>
+        <?php echo WPWHPRO()->helpers->translate( "Returns true if the email was sent and false if not.", $translation_ident ); ?>
+    </li>
+    <li>
+        <strong>$return_args</strong> (array)
+        <br>
+        <?php echo WPWHPRO()->helpers->translate( "Contains the response data of the request, which also include the complete validated data we used for sending the email.", $translation_ident ); ?>
+    </li>
+</ol>
+		<?php
+		$parameter['do_action']['description'] = ob_get_clean();
 
 			//This area will be displayed within the "return" area of the webhook action
 			ob_start();
@@ -130,75 +273,8 @@ if( !class_exists( 'WP_Webhooks_Email_Integration_Actions' ) ){
 <br><br>
 <h4><?php echo WPWHPRO()->helpers->translate( "Tipps", $translation_ident ); ?></h4>
 <ol>
-    <li><?php echo WPWHPRO()->helpers->translate( "To use HTML within your email, you need to set the content type to text/html. Please see the <strong>headers</strong> argument within the <strong>Special Arguments</strong> list for further details.", $translation_ident ); ?></li>
-    <li><?php echo WPWHPRO()->helpers->translate( "You can also set further settings like CC emails or BCC emails. Please see the <strong>headers</strong> argument within the <strong>Special Arguments</strong> list for further details.", $translation_ident ); ?></li>
-</ol>
-<br><br>
-<h4><?php echo WPWHPRO()->helpers->translate( "Special Arguments", $translation_ident ); ?></h4>
-<br>
-<h5><?php echo WPWHPRO()->helpers->translate( "send_to", $translation_ident ); ?></h5>
-<?php echo WPWHPRO()->helpers->translate( "This argument should contain the email address(es) you want to send this email to. To use multiple ones, simply separate them with a comma:", $translation_ident ); ?>
-<pre>demoemail@somedomain.demo,anotheremail@somedomain.demo</pre>
-<hr>
-<h5><?php echo WPWHPRO()->helpers->translate( "headers", $translation_ident ); ?></h5>
-<?php echo WPWHPRO()->helpers->translate( "This argument allows you to add further settings to your email using a JSON formatted string. Down below you will find a predefined JSON with the most common settings. If you want to read further on what's possible, you can checkout the following documentation:", $translation_ident ); ?> 
-<a target="_blank" href="https://developer.wordpress.org/reference/functions/wp_mail/" title="https://developer.wordpress.org/reference/functions/wp_mail/">https://developer.wordpress.org/reference/functions/wp_mail/</a>
-<br>
-<?php echo WPWHPRO()->helpers->translate( "The example below shows common settings within the formatted JSON for the <strong>headers</strong> argument. Explanations for each line are down below.", $translation_ident ); ?>
-<pre>[
-  "Content-Type: text/html; charset=UTF-8",
-  "From: Sender Name <anotheremail@someemail.demo>",
-  "Cc: First CC Name <receiver@someemail.demo>",
-  "Cc: onlyemail@someemail.demo",
-  "Bcc: bccmail@someemail.demo",
-  "Reply-To: Reply Name <replytome@someemail.demo>"
-]</pre>
-<ol>
-    <li><strong>Content-Type</strong>: <?php echo WPWHPRO()->helpers->translate( "This entry show you how you can customize the default content type.", $translation_ident ); ?></li>
-    <li><strong>Cc</strong>: <?php echo WPWHPRO()->helpers->translate( "This line allows you to show a custom from address. You can either use the simply email or the notation in the example to show further details about the receiver.", $translation_ident ); ?></li>
-    <li><strong>Cc</strong>: <?php echo WPWHPRO()->helpers->translate( "You can also define multiple times the Cc or Bcc entries if you want to send it to multiple persons. Also, this example shows how you can use only the email.", $translation_ident ); ?></li>
-    <li><strong>Bcc</strong>: <?php echo WPWHPRO()->helpers->translate( "The Bcc entry allows the same settings as the Cc entry.", $translation_ident ); ?></li>
-    <li><strong>Reply-To</strong>: <?php echo WPWHPRO()->helpers->translate( "This entry allows you to specify a different reply address for your email. You can either use the seen notation or a simple email as seen in the Cc example.", $translation_ident ); ?></li>
-</ol>
-<hr>
-<h5><?php echo WPWHPRO()->helpers->translate( "attachments", $translation_ident ); ?></h5>
-<?php echo WPWHPRO()->helpers->translate( "This argument allows you to attach one or multiple files to the email using a JSON formatted string. If you want to read further on what's possible, you can check out the following documentation:", $translation_ident ); ?> 
-<a target="_blank" href="https://developer.wordpress.org/reference/functions/wp_mail/" title="https://developer.wordpress.org/reference/functions/wp_mail/">https://developer.wordpress.org/reference/functions/wp_mail/</a>
-<br>
-<?php echo WPWHPRO()->helpers->translate( "The example below shows how you can use this argument. Explanations for each line are down below.", $translation_ident ); ?>
-<pre>[
-  "/Your/full/server/path/wp-content/uploads/2020/06/my-custom-file.jpg",
-  "{content-dir}/uploads/2020/06/another-file.png"
-]</pre>
-<ol>
-    <li><strong>Direct path</strong>: <?php echo WPWHPRO()->helpers->translate( "The fist line adds a jpeg image to the email. It does it by using the direct path of the image on the server.", $translation_ident ); ?></li>
-    <li><strong>Dynamic path</strong>: <?php echo WPWHPRO()->helpers->translate( "In case you do not want to hardcode the dynamic path, you can also use our <strong>{content-dir}</strong> tag, which automatically adds the direct path.", $translation_ident ); ?></li>
-</ol>
-<hr>
-<h5><?php echo WPWHPRO()->helpers->translate( "do_action", $translation_ident ); ?></h5>
-<?php echo WPWHPRO()->helpers->translate( "The <strong>do_action</strong> argument is an advanced webhook for developers. It allows you to fire a custom WordPress hook after the <strong>send_email</strong> action was fired.", $translation_ident ); ?>
-<br>
-<?php echo WPWHPRO()->helpers->translate( "You can use it to trigger further logic after the webhook action. Here's an example:", $translation_ident ); ?>
-<br>
-<br>
-<?php echo WPWHPRO()->helpers->translate( "Let's assume you set for the <strong>do_action</strong> parameter <strong>fire_this_function</strong>. In this case, we will trigger an action with the hook name <strong>fire_this_function</strong>. Here's how the code would look in this case:", $translation_ident ); ?>
-<pre>add_action( 'fire_this_function', 'my_custom_callback_function', 20, 2 );
-function my_custom_callback_function( $check, $return_args ){
-    //run your custom logic in here
-}
-</pre>
-<?php echo WPWHPRO()->helpers->translate( "Here's an explanation to each of the variables that are sent over within the custom function.", $translation_ident ); ?>
-<ol>
-    <li>
-        <strong>$check</strong> (bool)
-        <br>
-        <?php echo WPWHPRO()->helpers->translate( "Returns true if the email was sent and false if not.", $translation_ident ); ?>
-    </li>
-    <li>
-        <strong>$return_args</strong> (array)
-        <br>
-        <?php echo WPWHPRO()->helpers->translate( "Contains the response data of the request, which also include the complete validated data we used for sending the email.", $translation_ident ); ?>
-    </li>
+    <li><?php echo WPWHPRO()->helpers->translate( "To use HTML within your email, you need to set the content type to text/html. Please see the <strong>headers</strong> argument for further details.", $translation_ident ); ?></li>
+    <li><?php echo WPWHPRO()->helpers->translate( "You can also set further settings like CC emails or BCC emails. Please see the <strong>headers</strong> argument for further details.", $translation_ident ); ?></li>
 </ol>
 			<?php
 			$description = ob_get_clean();
@@ -245,18 +321,15 @@ function my_custom_callback_function( $check, $return_args ){
 			//Validate required fields
 			if( empty( $send_to ) ){
 				$return_args['msg'] = WPWHPRO()->helpers->translate( "The send_to argument cannot be empty.", 'action-send_email-failure' );
-				WPWHPRO()->webhook->echo_response_data( $return_args );
-				die();
+				return $return_args;
 			}
 			if( empty( $subject ) ){
 				$return_args['msg'] = WPWHPRO()->helpers->translate( "The subject argument cannot be empty.", 'action-send_email-failure' );
-				WPWHPRO()->webhook->echo_response_data( $return_args );
-				die();
+				return $return_args;
 			}
 			if( empty( $message ) ){
 				$return_args['msg'] = WPWHPRO()->helpers->translate( "The message argument cannot be empty.", 'action-send_email-failure' );
-				WPWHPRO()->webhook->echo_response_data( $return_args );
-				die();
+				return $return_args;
 			}
 
 			$headers = array();
@@ -305,8 +378,7 @@ function my_custom_callback_function( $check, $return_args ){
 				do_action( $do_action, $check, $return_args );
 			}
 
-			WPWHPRO()->webhook->echo_response_data( $return_args );
-			die();
+			return $return_args;
 		}
 
 	}

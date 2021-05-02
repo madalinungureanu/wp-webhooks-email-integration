@@ -5,8 +5,8 @@ Contributors: ironikus
 Donate link: https://paypal.me/ironikus
 Tags: email, e-mail, webhooks, automation, ironikus, wp_mail, email automation, zapier, api, wp webhooks, mailing
 Requires at least: 4.7
-Tested up to: 5.6
-Stable Tag: 1.0.1
+Tested up to: 5.7
+Stable Tag: 1.1.0
 License: GNU Version 3 or Any Later Version
 
 A WP Webhooks & Pro extension for integrating WordPress emails
@@ -40,6 +40,12 @@ Feel free to message us in case you want special features - We love to help!
 
 
 == Changelog ==
+
+= 1.1.0: May 02, 2021 =
+* Feature: Full compatibility with all new standards of WP Webhooks 3.1.0 and WP Webhooks 4.1.0
+* Tweak: Remove unnecessary variable output
+* Tweak optimize descriptions and performance for trigger callbacks
+* Dev: Webhook trigger responses are now accessible using the webhook url name
 
 = 1.0.1: December 20, 2020 =
 * Fix: The send_to argument did not work correctly due to a wrongly assigned argument key
